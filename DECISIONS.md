@@ -15,3 +15,4 @@ New entries are added at the bottom. Earlier decisions are not edited – if a d
 | 2026-10-01 | pytest and ruff set up from the start | Cheap to adopt before any code exists, and ensures consistent formatting and a working test setup for CI. |
 | 2026-10-01 | English for code, file names, commits and docs | Industry standard and accessible to international colleagues and reviewers. |
 | 2026-10-01 | Deferred: docs/ folder, pre-commit hooks, Conventional Commits | Not needed yet (YAGNI). Will be added if and when the project requires them. |
+| 2026-10-01 | GBFS Client-Identifier: `lucajuul-bysykkelforecast`, stored as env var BYSYKKEL_CLIENT_ID | Oslo Bysykkel requires a Client-Identifier header in the format name-app. Not a secret, but kept in config so it can change without code changes. Data is licensed under NLOD 2.0 (attribution required in README). Feed URLs are hardcoded instead of read from gbfs.json, for simplicity. |
