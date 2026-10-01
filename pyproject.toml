@@ -1,0 +1,6 @@
+[project]
+name = "oslo-bysykkel-forecast"
+version = "0.1.0"
+description = "Predicts available bikes and docks at Oslo Bysykkel stations 15, 30 and 60 minutes ahead."
+requires-python = ">=3.13"
+dependencies = []
