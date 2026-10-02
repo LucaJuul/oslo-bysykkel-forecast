@@ -7,6 +7,7 @@
 ## Planned architecture
 
 - **Data source:** Oslo Bysykkel's open real-time API (GBFS)
+- **Link to data souce:** https://oslobysykkel.no/en/open-data/realtime
 - **Collector:** Python script run on a schedule by GitHub Actions
 - **Storage:** PostgreSQL (Neon or Supabase)
 - **Machine learning:** pandas, scikit-learn and LightGBM
