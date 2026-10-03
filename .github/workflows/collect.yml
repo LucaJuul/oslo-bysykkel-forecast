@@ -1,0 +1,25 @@
+name: Collect bike data
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: collector
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --no-dev
+      - run: uv run --no-dev python -m collector.main
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BYSYKKEL_CLIENT_ID: ${{ secrets.BYSYKKEL_CLIENT_ID }}
