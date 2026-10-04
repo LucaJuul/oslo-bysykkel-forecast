@@ -2,23 +2,37 @@
 
 *"Will I find a city bike?"* – a web app that predicts the number of available bikes and free docks at Oslo Bysykkel stations 15, 30 and 60 minutes ahead.
 
-**Status:** Under development – currently in phase 0 (project setup).
+**Status:** Under development – phase 1 (data collection) is running.
 
-## Planned architecture
+## Architecture
 
-- **Data source:** Oslo Bysykkel's open real-time API (GBFS)
-- **Link to data souce:** https://oslobysykkel.no/en/open-data/realtime
-- **Collector:** Python script run on a schedule by GitHub Actions
-- **Storage:** PostgreSQL (Neon or Supabase)
-- **Machine learning:** pandas, scikit-learn and LightGBM
-- **API:** FastAPI serving predictions per station
-- **Frontend:** Interactive map built with Leaflet
+- **Data source:** Oslo Bysykkel's open real-time API (GBFS 2.3)
+- **Collector:** Python script run every 15 minutes in GitHub Actions, triggered by cron-job.org
+- **Storage:** PostgreSQL on Neon (free plan)
+- **Machine learning (planned):** pandas, scikit-learn and LightGBM
+- **API (planned):** FastAPI serving predictions per station
+- **Frontend (planned):** Interactive map built with Leaflet
 - **Quality:** pytest for tests, ruff for linting and formatting
+
+## Data collection
+
+The collector fetches station status from Oslo Bysykkel every 15 minutes and
+stores it in Postgres. Only measurements that changed since the previous run are
+saved. Station information (name, position, capacity) is refreshed once a day.
+See [collector/README.md](collector/README.md) for details.
+
+### Data source and licence
+
+Real-time data from [Oslo Bysykkel](https://oslobysykkel.no/en/open-data/realtime),
+licensed under the
+[Norwegian Licence for Open Government Data (NLOD) 2.0](https://data.norge.no/nlod/en/2.0).
+The MIT licence below covers the code in this repository, not the data.
 
 ## Project structure
 
 ```
 collector/   Data collection from the Oslo Bysykkel API
+db/          Database schema and monitoring queries
 api/         FastAPI backend
 ml/          Feature engineering and model training
 frontend/    Leaflet web map
@@ -36,6 +50,13 @@ cd oslo-bysykkel-forecast
 uv sync
 cp .env.example .env   # then fill in real values
 uv run pytest
+```
+
+To run the collector locally, create the tables once by running `db/schema.sql`
+against your database, then:
+
+```bash
+uv run --env-file .env python -m collector.main
 ```
 
 ## Results
