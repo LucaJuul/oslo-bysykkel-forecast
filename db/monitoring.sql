@@ -15,3 +15,10 @@ ORDER BY day DESC;
 SELECT pg_size_pretty(pg_database_size(current_database())) AS database,
        pg_size_pretty(pg_total_relation_size('station_status')) AS station_status,
        pg_size_pretty(pg_total_relation_size('stations')) AS stations;
+
+-- 4. Time between runs. Gaps should be around 15 minutes.
+SELECT fetched_at AT TIME ZONE 'Europe/Oslo' AS oslo_time,
+       fetched_at - lag(fetched_at) OVER (ORDER BY fetched_at) AS gap
+FROM (SELECT DISTINCT fetched_at FROM station_status) AS runs
+ORDER BY fetched_at DESC
+LIMIT 20;
