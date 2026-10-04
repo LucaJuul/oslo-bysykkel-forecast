@@ -1,6 +1,9 @@
 name: Collect bike data
 
 on:
+  # Primary trigger: cron-job.org calls workflow_dispatch every 15 minutes,
+  # because GitHub's own schedule was throttled to runs every 2–6 hours.
+  # The schedule below is kept as a fallback.
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
