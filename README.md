@@ -1,8 +1,11 @@
 # Finner jeg en bysykkel?
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
+
 *"Will I find a city bike?"* – a web app that predicts the number of available bikes and free docks at Oslo Bysykkel stations 15, 30 and 60 minutes ahead.
 
-**Status:** Under development – phase 1 (data collection) is running.
+**Status:** Data collection running every 15 minutes since 4 October 2026. Runs are triggered by cron-job.org because GitHub Actions' scheduled runs were too unreliable.
 
 ## Architecture
 
