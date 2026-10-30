@@ -16,11 +16,13 @@ OSLO = "Europe/Oslo"
 # Before this, GitHub's throttled schedule left gaps of several hours.
 ANALYSIS_START = pd.Timestamp("2026-10-04 18:00", tz=OSLO)
 
-# Outages we know about. GitHub Actions incident, 5-6 October.
+# Outages shorter than MAX_SILENCE that we know about: the first part of the
+# GitHub Actions incident on 5 October (last and first run around it). The longer
+# part that night, 00:45-07:14, is caught by the MAX_SILENCE rule.
 KNOWN_OUTAGES = [
     (
-        pd.Timestamp("2026-10-05 21:00", tz=OSLO),
-        pd.Timestamp("2026-10-06 07:15", tz=OSLO),
+        pd.Timestamp("2026-10-05 21:05", tz=OSLO),
+        pd.Timestamp("2026-10-05 23:32", tz=OSLO),
     ),
 ]
 

@@ -24,3 +24,7 @@ pythonpath = ["."]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Notebooks set up sys.path before importing, and long f-strings read better unwrapped.
+"notebooks/*.ipynb" = ["E402", "E501"]
