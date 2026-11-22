@@ -8,16 +8,22 @@ Prediction:  clip(bikes + predicted change)  (same clip as the baselines)
 Loss:        L1 (mean absolute error), the metric we report.
 """
 
+import json
+from pathlib import Path
+
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
 from ml.baselines import clip
 from ml.features import CATEGORICAL, FEATURES
+from ml.weather import WEATHER_COLUMNS
 
-MODEL_FEATURES = [*FEATURES, "horizon"]
+# Weather is computed in ml.features but left out of the model: on the
+# validation week it made MAE slightly worse (see DECISIONS.md).
+MODEL_FEATURES = [f for f in FEATURES if f not in WEATHER_COLUMNS] + ["horizon"]
 
-# Starting point, tuned step by step on the validation week (see DECISIONS.md).
+# Tuned step by step on the validation week (see DECISIONS.md).
 PARAMS = {
     "objective": "l1",  # optimise MAE directly
     "metric": "l1",  # early stopping and learning curve always use MAE
@@ -32,6 +38,11 @@ PARAMS = {
 }
 MAX_ROUNDS = 3000
 EARLY_STOPPING = 100  # stop when validation MAE has not improved for this many trees
+
+# The final model trains on the whole training period, with no validation week
+# left for early stopping. Tuning stopped at 57 trees on 832k pairs; the full
+# period has 1.64 times as many, so the tree count is scaled to match.
+FINAL_ROUNDS = 94
 
 
 def dataset(features: pd.DataFrame, reference=None) -> lgb.Dataset:
@@ -84,3 +95,22 @@ def predict(booster: lgb.Booster, features: pd.DataFrame) -> np.ndarray:
         features[MODEL_FEATURES], num_iteration=booster.best_iteration or None
     )
     return clip(features["bikes"].to_numpy() + change, features)
+
+
+MODEL_DIR = Path("models")
+
+
+def save(booster: lgb.Booster, stations: list, info: dict, path: Path = MODEL_DIR):
+    """Write the model (LightGBM text format) and what is needed to use it."""
+    path.mkdir(parents=True, exist_ok=True)
+    booster.save_model(path / "lightgbm.txt")
+    meta = {"features": MODEL_FEATURES, "stations": stations, **info}
+    (path / "metadata.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+
+def load(path: Path = MODEL_DIR) -> tuple[lgb.Booster, dict]:
+    booster = lgb.Booster(model_file=str(path / "lightgbm.txt"))
+    meta = json.loads((path / "metadata.json").read_text(encoding="utf-8"))
+    if meta["features"] != MODEL_FEATURES:
+        raise ValueError("Saved model was trained with other features; retrain it.")
+    return booster, meta
