@@ -9,11 +9,17 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "ipykernel>=7.4.0",
+api = [
+    "fastapi>=0.165.0",
     "lightgbm>=4.7.0",
-    "matplotlib>=3.11.2",
     "pandas>=3.1.0",
+    "uvicorn>=0.54.0",
+]
+dev = [
+    # Everything the API needs, so `uv sync` gives one environment for development.
+    { include-group = "api" },
+    "ipykernel>=7.4.0",
+    "matplotlib>=3.11.2",
     "pyarrow>=26.0.0",
     "pytest>=9.1.1",
     "ruff>=0.16.9",
