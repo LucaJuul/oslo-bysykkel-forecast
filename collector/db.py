@@ -36,8 +36,15 @@ def upsert_stations(conn, stations: list[Station]) -> None:
                 updated_at = now()
             """,
             [
-                (s.station_id, s.name, s.address, s.lat, s.lon, s.capacity,
-                 s.is_virtual_station)
+                (
+                    s.station_id,
+                    s.name,
+                    s.address,
+                    s.lat,
+                    s.lon,
+                    s.capacity,
+                    s.is_virtual_station,
+                )
                 for s in stations
             ],
         )
@@ -57,9 +64,7 @@ def latest_status_keys(conn) -> dict[str, StatusKey]:
     return {row[0]: tuple(row[1:]) for row in rows}
 
 
-def insert_statuses(
-    conn, statuses: list[StationStatus], fetched_at: datetime
-) -> None:
+def insert_statuses(conn, statuses: list[StationStatus], fetched_at: datetime) -> None:
     with conn.cursor() as cur:
         cur.executemany(
             """
@@ -71,9 +76,17 @@ def insert_statuses(
             ON CONFLICT DO NOTHING
             """,
             [
-                (s.station_id, fetched_at, s.last_reported, s.num_bikes_available,
-                 s.num_ebikes_available, s.num_docks_available,
-                 s.is_installed, s.is_renting, s.is_returning)
+                (
+                    s.station_id,
+                    fetched_at,
+                    s.last_reported,
+                    s.num_bikes_available,
+                    s.num_ebikes_available,
+                    s.num_docks_available,
+                    s.is_installed,
+                    s.is_renting,
+                    s.is_returning,
+                )
                 for s in statuses
             ],
         )
