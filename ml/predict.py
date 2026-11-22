@@ -3,6 +3,9 @@
     forecaster = Forecaster()                    # loads models/
     forecaster.predict(grid, stations)           # one row per station and horizon
 
+Each row has the expected bikes and docks, and the probability of at least one
+bike (`p_bike`) and at least one free dock (`p_dock`).
+
 `grid` is ml.grid.to_grid output that ends at the current slot and reaches at
 least HISTORY_NEEDED (7 days + 1 hour) back; with less, the lag features are
 missing and the forecasts get closer to "unchanged". Because the collector only
@@ -13,14 +16,16 @@ latest row before it, so forward fill has a starting value.
 import logging
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from ml.baselines import derive_docks
 from ml.config import HORIZONS
 from ml.features import HISTORY_NEEDED, add_features
 from ml.grid import FREQ
-from ml.model import MODEL_DIR, load, predict
+from ml.model import MODEL_DIR, load, load_classifiers, predict
 from ml.pairs import ACTIVE_FLAGS, frozen_mask, local_time
+from ml.probability import TARGETS, predict_proba
 
 log = logging.getLogger("predict")
 
@@ -33,6 +38,8 @@ OUTPUT_COLUMNS = [
     "docks_now",
     "bikes",
     "docks",
+    "p_bike",
+    "p_dock",
     "reliable",
 ]
 
@@ -40,6 +47,7 @@ OUTPUT_COLUMNS = [
 class Forecaster:
     def __init__(self, path: Path = MODEL_DIR):
         self.booster, self.meta = load(path)
+        self.classifiers = load_classifiers(path, self.meta)
 
     def predict(
         self, grid: pd.DataFrame, stations: pd.DataFrame, horizons: dict = HORIZONS
@@ -79,9 +87,19 @@ class Forecaster:
         pairs = pd.concat(rows, ignore_index=True)
         pairs = pairs.join(local_time(pairs["slot"]))
 
-        features = add_features(pairs, g, stations=self.meta["stations"])
+        features = add_features(
+            pairs,
+            g,
+            stations=self.meta["stations"],
+            neighbours=self.meta.get("neighbours"),
+        )
         bikes = predict(self.booster, features)
         out = features.rename(columns={"bikes": "bikes_now", "docks": "docks_now"})
         out["bikes"] = bikes
         out["docks"] = derive_docks(features, bikes)
+        for target in TARGETS:
+            classifier = self.classifiers.get(target)
+            out[f"p_{target}"] = (
+                np.nan if classifier is None else predict_proba(classifier, features)
+            )
         return out[OUTPUT_COLUMNS].reset_index(drop=True)

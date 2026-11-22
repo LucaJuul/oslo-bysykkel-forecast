@@ -14,7 +14,8 @@ Data preparation, models and evaluation.
 | `weather.py` | Hourly weather at Oslo Blindern from MET Frost to `data/weather.parquet` |
 | `features.py` | Model features, using only values known at the origin |
 | `model.py` | LightGBM training, prediction, save and load |
-| `run_model.py` | Trains the final model, saves `models/`, writes `results/model*.*` |
+| `probability.py` | Classifiers for P(at least one bike / free dock), baselines, Brier score |
+| `run_model.py` | Trains the final models, saves `models/`, writes `results/model*.*` and `results/probability*.*` |
 | `predict.py` | `Forecaster`: forecasts from current data, for the API |
 
 Run everything:

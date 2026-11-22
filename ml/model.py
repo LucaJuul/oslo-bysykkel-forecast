@@ -40,17 +40,21 @@ MAX_ROUNDS = 3000
 EARLY_STOPPING = 100  # stop when validation MAE has not improved for this many trees
 
 # The final model trains on the whole training period, with no validation week
-# left for early stopping. Tuning stopped at 57 trees on 832k pairs; the full
-# period has 1.64 times as many, so the tree count is scaled to match.
-FINAL_ROUNDS = 94
+# left for early stopping. With neighbour and system features, tuning stopped at
+# 97 trees on 832k pairs; the full period has 1.64 times as many, so the tree
+# count is scaled to match (it was 57 -> 94 before those features).
+TRAIN_SCALE = 1_368_654 / 832_174
+FINAL_ROUNDS = round(97 * TRAIN_SCALE)  # 160
 
 
-def dataset(features: pd.DataFrame, reference=None) -> lgb.Dataset:
+def dataset(
+    features: pd.DataFrame, reference=None, columns: list = MODEL_FEATURES
+) -> lgb.Dataset:
     """Features and target (change in bikes). A validation set passes the
     training set as `reference`, so both use the same histogram bins."""
     change = features["target_bikes"] - features["bikes"]
     return lgb.Dataset(
-        features[MODEL_FEATURES],
+        features[columns],
         label=change.to_numpy(dtype="float64"),
         categorical_feature=CATEGORICAL,
         reference=reference,
@@ -63,18 +67,19 @@ def train(
     val: pd.DataFrame | None = None,
     params: dict = PARAMS,
     rounds: int = MAX_ROUNDS,
+    columns: list = MODEL_FEATURES,
 ) -> tuple[lgb.Booster, dict]:
     """Train on `fit`. With `val`, use early stopping on its MAE.
 
     Returns the model and the learning curve: {"fit": {"l1": [...]},
     "val": {"l1": [...]}}, one value per tree.
     """
-    fit_set = dataset(fit)
+    fit_set = dataset(fit, columns=columns)
     sets, names = [fit_set], ["fit"]
     callbacks = []
     history: dict = {}
     if val is not None:
-        sets.append(dataset(val, reference=fit_set))
+        sets.append(dataset(val, reference=fit_set, columns=columns))
         names.append("val")
         callbacks.append(lgb.early_stopping(EARLY_STOPPING, verbose=False))
     callbacks.append(lgb.record_evaluation(history))
@@ -90,9 +95,10 @@ def train(
 
 
 def predict(booster: lgb.Booster, features: pd.DataFrame) -> np.ndarray:
-    """Predicted bikes at the target, clipped to [0, capacity]."""
+    """Predicted bikes at the target, clipped to [0, capacity].
+    Uses the features the model was trained with."""
     change = booster.predict(
-        features[MODEL_FEATURES], num_iteration=booster.best_iteration or None
+        features[booster.feature_name()], num_iteration=booster.best_iteration or None
     )
     return clip(features["bikes"].to_numpy() + change, features)
 
@@ -100,11 +106,26 @@ def predict(booster: lgb.Booster, features: pd.DataFrame) -> np.ndarray:
 MODEL_DIR = Path("models")
 
 
-def save(booster: lgb.Booster, stations: list, info: dict, path: Path = MODEL_DIR):
-    """Write the model (LightGBM text format) and what is needed to use it."""
+def save(
+    booster: lgb.Booster,
+    stations: list,
+    info: dict,
+    path: Path = MODEL_DIR,
+    classifiers: dict | None = None,
+):
+    """Write the model and the classifiers (LightGBM text format, one file each)
+    and what is needed to use them."""
     path.mkdir(parents=True, exist_ok=True)
     booster.save_model(path / "lightgbm.txt")
-    meta = {"features": MODEL_FEATURES, "stations": stations, **info}
+    classifiers = classifiers or {}
+    for target, classifier in classifiers.items():
+        classifier.save_model(path / f"p_{target}.txt")
+    meta = {
+        "features": MODEL_FEATURES,
+        "stations": stations,
+        "classifiers": sorted(classifiers),
+        **info,
+    }
     (path / "metadata.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
@@ -114,3 +135,11 @@ def load(path: Path = MODEL_DIR) -> tuple[lgb.Booster, dict]:
     if meta["features"] != MODEL_FEATURES:
         raise ValueError("Saved model was trained with other features; retrain it.")
     return booster, meta
+
+
+def load_classifiers(path: Path, meta: dict) -> dict[str, lgb.Booster]:
+    """The probability models saved next to the main model, by target."""
+    return {
+        target: lgb.Booster(model_file=str(path / f"p_{target}.txt"))
+        for target in meta.get("classifiers", [])
+    }

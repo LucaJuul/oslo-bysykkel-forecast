@@ -8,6 +8,7 @@ from ml.features import add_features
 from ml.model import PARAMS, load, predict, save, train
 from ml.pairs import make_pairs
 from ml.predict import OUTPUT_COLUMNS, Forecaster
+from ml.probability import CLS_PARAMS, train_classifier
 
 T0 = pd.Timestamp("2026-10-10 00:00", tz="UTC")
 STATIONS = pd.DataFrame({"station_id": ["a", "b"], "capacity": [20, 20]})
@@ -48,8 +49,13 @@ def model_dir(tmp_path_factory):
     features = add_features(pairs[pairs["valid"]], grid, stations=["a", "b"])
     params = PARAMS | {"num_leaves": 4, "min_data_in_leaf": 5}
     booster, _ = train(features, None, params, rounds=5)
+    cls_params = CLS_PARAMS | {"num_leaves": 4, "min_data_in_leaf": 5}
+    classifiers = {
+        target: train_classifier(features, None, target, cls_params, rounds=5)[0]
+        for target in ["bike", "dock"]
+    }
     path = tmp_path_factory.mktemp("model")
-    save(booster, ["a", "b"], {"trees": 5}, path)
+    save(booster, ["a", "b"], {"trees": 5}, path, classifiers=classifiers)
     return path
 
 
@@ -70,6 +76,7 @@ def test_forecasts_are_clipped_and_docks_follow_from_bikes(model_dir):
     assert out["bikes"].between(0, 20).all()
     total_now = out["bikes_now"] + out["docks_now"]
     np.testing.assert_allclose(out["docks"], total_now - out["bikes"])
+    assert out[["p_bike", "p_dock"]].apply(lambda p: p.between(0, 1)).all(axis=None)
 
 
 def test_same_forecast_as_the_training_path(model_dir):
@@ -121,3 +128,11 @@ def test_loading_refuses_a_model_with_other_features(model_dir, tmp_path):
     (tmp_path / "metadata.json").write_text(json.dumps(meta))
     with pytest.raises(ValueError):
         load(tmp_path)
+
+
+def test_without_saved_classifiers_the_probabilities_are_missing(model_dir, tmp_path):
+    booster, meta = load(model_dir)
+    save(booster, meta["stations"], {}, tmp_path)
+    out = Forecaster(tmp_path).predict(make_grid(), STATIONS)
+    assert out[["p_bike", "p_dock"]].isna().all(axis=None)
+    assert out["bikes"].notna().all()
