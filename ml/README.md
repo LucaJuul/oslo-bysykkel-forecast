@@ -11,10 +11,13 @@ Data preparation, models and evaluation.
 | `baselines.py` | Naive models: unchanged, same time last week, mean change profile |
 | `evaluate.py` | MAE per horizon: all hours, daytime, weekday rush |
 | `run_baselines.py` | Runs the baselines and writes `results/baselines.*` |
+| `weather.py` | Hourly weather at Oslo Blindern from MET Frost to `data/weather.parquet` |
+| `features.py` | Model features, using only values known at the origin |
 
 Run the baselines:
 
 ```
 uv run --env-file .env python -m ml.export_data   # fresh data
+uv run --env-file .env python -m ml.weather       # weather (needs FROST_CLIENT_ID)
 uv run python -m ml.run_baselines
 ```

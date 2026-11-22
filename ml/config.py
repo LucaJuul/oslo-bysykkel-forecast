@@ -15,6 +15,12 @@ from ml.grid import OSLO
 SPLIT = pd.Timestamp("2026-10-23 00:00", tz=OSLO)
 TEST_END = pd.Timestamp("2026-10-30 00:00", tz=OSLO)
 
+# Phase 4: the last training week is held out for tuning (early stopping,
+# hyperparameters), so the test week is used only once, for the final score.
+# Tuning trains on targets before VAL_START and validates on origins in
+# [VAL_START, SPLIT) whose targets are also before SPLIT.
+VAL_START = SPLIT - pd.Timedelta(days=7)
+
 # Forecast horizon in minutes -> number of 15-minute grid steps.
 HORIZONS = {15: 1, 30: 2, 60: 4}
 

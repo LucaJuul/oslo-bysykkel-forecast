@@ -7,7 +7,7 @@ trained and evaluated on the same pairs, so their errors are comparable.
 
 import pandas as pd
 
-from ml.config import FROZEN_AFTER, HORIZONS, SPLIT, TEST_END
+from ml.config import FROZEN_AFTER, HORIZONS, SPLIT, TEST_END, VAL_START
 from ml.grid import FREQ, OSLO
 
 ACTIVE_FLAGS = ["is_installed", "is_renting", "is_returning"]
@@ -95,6 +95,32 @@ def split(pairs: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     train = valid[valid["target_slot"] < SPLIT]
     test = valid[(valid["slot"] >= SPLIT) & (valid["slot"] < TEST_END)]
     return train.reset_index(drop=True), test.reset_index(drop=True)
+
+
+def tuning_split(pairs: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Valid pairs for tuning, all inside the training period.
+
+    Same rule as `split`, one week earlier: fit on targets before VAL_START,
+    validate on origins in [VAL_START, SPLIT) with targets before SPLIT.
+    """
+    valid = pairs[pairs["valid"]]
+    fit = valid[valid["target_slot"] < VAL_START]
+    val = valid[
+        (valid["slot"] >= VAL_START)
+        & (valid["slot"] < SPLIT)
+        & (valid["target_slot"] < SPLIT)
+    ]
+    return fit.reset_index(drop=True), val.reset_index(drop=True)
+
+
+def late_period(pairs: pd.DataFrame) -> pd.DataFrame:
+    """Valid pairs with origin from TEST_END to the end of the data.
+
+    Reported separately from the main result, to see how the model holds up
+    over time (later in the autumn, colder, never seen in training).
+    """
+    valid = pairs[pairs["valid"]]
+    return valid[valid["slot"] >= TEST_END].reset_index(drop=True)
 
 
 def exclusion_summary(pairs: pd.DataFrame) -> pd.Series:
