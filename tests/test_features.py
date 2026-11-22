@@ -2,12 +2,21 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ml.features import FEATURES, add_features, lookup
+from ml.features import (
+    FEATURES,
+    NEIGHBOUR_FEATURES,
+    SYSTEM_FEATURES,
+    add_features,
+    lookup,
+    nearest_neighbours,
+)
 from ml.pairs import make_pairs
 from ml.weather import tidy, weather_at
 
 T0 = pd.Timestamp("2026-10-10 12:00", tz="UTC")
-STATIONS = pd.DataFrame({"station_id": ["a", "b"], "capacity": [20, 20]})
+STATIONS = pd.DataFrame({"station_id": ["a", "b", "c"], "capacity": [20, 20, 20]})
+# Each station's nearest neighbour, as nearest_neighbours would return with k=1.
+NEIGHBOURS = {"a": ["b"], "b": ["a"], "c": ["b"]}
 
 
 def make_grid(bikes: dict, start=T0) -> pd.DataFrame:
@@ -34,7 +43,7 @@ def make_grid(bikes: dict, start=T0) -> pd.DataFrame:
 
 def features_for(grid, horizons=None, weather=None):
     pairs = make_pairs(grid, STATIONS, horizons=horizons or {15: 1})
-    features = add_features(pairs, grid, weather)
+    features = add_features(pairs, grid, weather, neighbours=NEIGHBOURS)
     return features.sort_values(["station_id", "horizon", "slot"]).reset_index(
         drop=True
     )
@@ -79,7 +88,8 @@ def test_no_feature_changes_when_the_future_changes():
     before = features_for(grid, horizons)
     after = features_for(changed, horizons)
     keep = before["slot"] <= cut
-    assert before.loc[keep, "last_week_change"].notna().any()
+    for column in ["last_week_change", *NEIGHBOUR_FEATURES, *SYSTEM_FEATURES]:
+        assert before.loc[keep, column].notna().any(), column
     pd.testing.assert_frame_equal(before.loc[keep, numeric], after.loc[keep, numeric])
     # Sanity check: the rewrite did change the targets, so the test can fail.
     assert not before["target_bikes"].equals(after["target_bikes"])
@@ -157,3 +167,53 @@ def test_weather_features_come_from_the_origin():
     f = features_for(grid, horizons={60: 4}, weather=weather)
     # Origin 11:30: only 10:00 is known, even though the target (12:30) is later.
     assert f["temperature"].iloc[0] == 8.0
+
+
+def test_nearest_neighbours_by_distance():
+    stations = pd.DataFrame(
+        {
+            "station_id": [1, 2, 3, 4],
+            # 2 is ~110 m north of 1, 3 is ~1.1 km north, 4 is ~5.5 km east.
+            "lat": [59.910, 59.911, 59.920, 59.910],
+            "lon": [10.750, 10.750, 10.750, 10.850],
+        }
+    )
+    near = nearest_neighbours(stations, k=2)
+    assert near["1"] == ["2", "3"]
+    assert near["3"] == ["2", "1"]
+    assert "1" not in near["1"]
+
+
+def test_neighbour_change_is_the_mean_change_at_the_neighbours():
+    grid = make_grid({"a": [5, 5, 5, 5, 5], "b": [1, 3, 6, 10, 15], "c": [9] * 5})
+    f = features_for(grid, horizons={15: 1})
+    a = f[f["station_id"] == "a"].reset_index(drop=True)
+    # a's neighbour is b; a itself never changes.
+    assert a["nb_change_15"].tolist()[1:4] == [2, 3, 4]
+    assert np.isnan(a["nb_change_60"][3])
+    assert a["nb_change_60"][4] == 14
+
+
+def test_neighbour_in_a_gap_is_skipped():
+    neighbours = {"a": ["b", "c"], "b": ["a"], "c": ["a"]}
+    grid = make_grid({"a": [5, 5, 5], "b": [1, None, 4], "c": [2, 3, 5]})
+    pairs = make_pairs(grid, STATIONS, horizons={15: 1})
+    f = add_features(pairs, grid, neighbours=neighbours)
+    a = f[f["station_id"] == "a"].sort_values("slot")
+    # Slot 1: b is in a gap, so only c counts (+1). Slot 2: b's change crosses
+    # the gap and is unknown, so only c counts (+2).
+    assert a["nb_change_15"].tolist()[1:] == [1, 2]
+
+
+def test_system_features_sum_over_all_stations():
+    grid = make_grid({"a": [5, 7, 4, 4, 6], "b": [1, 1, 3, 2, 2], "c": [9] * 5})
+    f = features_for(grid, horizons={15: 1})
+    a = f[f["station_id"] == "a"].reset_index(drop=True)
+    # Bikes moved per slot: |2|+0, |-3|+|2|, 0+|-1|, |2|+0 -> 2, 5, 1, 2
+    assert a["sys_activity_15"].tolist()[1:5] == [2, 5, 1, 2]
+    assert np.isnan(a["sys_activity_60"][3])
+    assert a["sys_activity_60"][4] == 10
+    # Net change in docked bikes over 60 min: (6-5) + (2-1) + 0 = 2
+    assert a["sys_change_60"][4] == 2
+    # The same city-wide value at every station.
+    assert f.groupby("slot")["sys_activity_15"].nunique().max() == 1
